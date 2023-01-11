@@ -123,7 +123,7 @@ class Solver:
         self.SetRoutedFlagToFalseForAllCustomers()
         self.ApplyNearestNeighborMethod()
         # self.MinimumInsertions()
-        self.geteasysol()
+        # self.geteasysol()
         self.ReportSolution(self.sol)
         self.LocalSearch(2)
         self.ReportSolution(self.sol)
@@ -151,62 +151,30 @@ class Solver:
             last_node: Node = r.sequenceOfNodes[-1]
             last_node.route = r
             list_of_last_nodes.append(last_node)
+
         dist = self.distanceMatrix[node.ID]
         nearest_v = 100000000
         for l_node in list_of_last_nodes:
             l_node_id = l_node.ID
-            if dist[l_node_id] < nearest_v and l_node.route.load + node.demand < l_node.route.capacity:
+            waiting_time = dist[l_node_id] + l_node.waitingtime
+            waiting_time = 2.5 * dist[l_node_id] + l_node.waitingtime
+            if waiting_time < nearest_v and l_node.route.load + node.demand < l_node.route.capacity:
                 nearest_node = l_node
-                nearest_v = dist[l_node_id]
+                nearest_v = waiting_time
 
-        self.used.add(node.ID)
+        nearest_v -= 1.5 * dist[nearest_node.ID]
+
         return nearest_node, nearest_v
 
-    def ApplyNearestNeighborMethod1(self):
-        modelIsFeasible = True
-        self.sol = Solution()
-        for i in range(0, 14):
-            self.sol.routes.append(Route(self.depot, self.capacity))
-        j = 0
-        for i in range(1, len(self.allNodes) - 28):
-            route_index = j % 14
-            route: Route = self.sol.routes[route_index]
-            last_node: Node = route.sequenceOfNodes[-1]
-            nearest_possible, value = self.find_node(route, last_node)
-            n1: Node = self.allNodes[nearest_possible]
-            n1.isRouted = True
-            up_coming_len = len(route.sequenceOfNodes) + 1
-            if up_coming_len > 2:
-                n1.waitingtime += 10
-            n1.waitingtime += last_node.waitingtime + value
-            route.cost += n1.waitingtime
-            self.sol.cost+=n1.waitingtime
-            route.load += n1.demand
-            n1.cost_up_to_here = route.cost
-            n1.positionInRoute = len(route.sequenceOfNodes)
-            route.sequenceOfNodes.append(n1)
-            j += 1
-
-        number_of_unrouted_nodes = 28
-        for i in range(number_of_unrouted_nodes):
-            for node in self.customers:
-                if node.isRouted == False:
-                    nearest_last_node, value = self.find_route(node)
-
-                    node.isRouted = True
-
-                    node.waitingtime += 10
-                    node.waitingtime += nearest_last_node.waitingtime + value
-                    nearest_last_node.route.cost += node.waitingtime
-                    self.sol.cost+=node.waitingtime
-                    nearest_last_node.route.load += node.demand
-                    node.cost_up_to_here = nearest_last_node.route.cost
-                    node.positionInRoute = len(nearest_last_node.route.sequenceOfNodes)
-                    nearest_last_node.route.sequenceOfNodes.append(node)
-        self.sol.cost_penalized=self.sol.cost
-
-        if (modelIsFeasible == False):
-            print('FeasibilityIssue')
+    def find_most_distant_node(self):
+        dist_of_most_distant = 1000000
+        for node in self.customers:
+            if node.isRouted == False:
+                nearest_node, nearest_v = self.find_route(node)
+                if nearest_v < dist_of_most_distant:
+                    dist_of_most_distant = nearest_v
+                    most_distant = node
+        return most_distant
 
     def ApplyNearestNeighborMethod(self):
         modelIsFeasible = True
@@ -214,7 +182,7 @@ class Solver:
         for i in range(0, 14):
             self.sol.routes.append(Route(self.depot, self.capacity))
         j = 0
-        for i in range(1, len(self.allNodes)):
+        for i in range(1, len(self.allNodes) - 86):
             route_index = j % 14
             route: Route = self.sol.routes[route_index]
             last_node: Node = route.sequenceOfNodes[-1]
@@ -225,24 +193,52 @@ class Solver:
             if up_coming_len > 2:
                 n1.waitingtime += 10
             n1.waitingtime += last_node.waitingtime + value
-            route.cost += n1.waitingtime
             self.sol.cost += n1.waitingtime
+            route.cost += n1.waitingtime
             route.load += n1.demand
             n1.cost_up_to_here = route.cost
             n1.positionInRoute = len(route.sequenceOfNodes)
             route.sequenceOfNodes.append(n1)
             j += 1
-        self.sol.cost_penalized = self.sol.cost
+
+        number_of_unrouted_nodes = 86
+        for i in range(number_of_unrouted_nodes):
+            node = self.find_most_distant_node()
+            nearest_last_node, value = self.find_route(node)
+            self.used.add(node.ID)
+            node.isRouted = True
+
+            node.waitingtime += 10
+            node.waitingtime += value
+            nearest_last_node.route.cost += node.waitingtime
+            self.sol.cost += node.waitingtime
+            nearest_last_node.route.load += node.demand
+            node.cost_up_to_here = nearest_last_node.route.cost
+            node.positionInRoute = len(nearest_last_node.route.sequenceOfNodes)
+            nearest_last_node.route.sequenceOfNodes.append(node)
+
+        if (modelIsFeasible == False):
+            print('FeasibilityIssue')
+            # reportSolution
 
     def geteasysol(self):
-        routes = [[52, 88, 7, 82, 48, 8, 46], [89, 18, 60, 83, 5, 17, 47, 36], [12, 68, 80, 29, 24, 65],
-                  [28, 77, 3, 79, 78, 34, 35], [58, 97, 87, 42, 15, 43], [6, 96, 99, 85, 91, 16, 86, 14],
-                  [76, 50, 33, 9, 51, 66, 71], [95, 59, 92, 98, 61, 84, 45, 19, 64], [53, 2, 57, 41, 22, 67],
-                  [69, 70, 30, 20, 32, 90, 63, 49, 11], [40, 21, 73, 72, 74, 75, 23],
-                  [13, 94, 93, 37, 100, 44, 38], [27, 31, 62, 10, 1, 81], [26, 54, 55, 25, 4, 56, 39]]
+        # zax routes
+        routes1 = [[52, 88, 7, 82, 48, 8, 46], [89, 18, 60, 83, 5, 17, 47, 36], [12, 68, 80, 29, 24, 65],
+                   [28, 77, 3, 79, 78, 34, 35], [58, 97, 87, 42, 15, 43], [6, 96, 99, 85, 91, 16, 86, 14],
+                   [76, 50, 33, 9, 51, 66, 71], [95, 59, 92, 98, 61, 84, 45, 19, 64], [53, 2, 57, 41, 22, 67],
+                   [69, 70, 30, 20, 32, 90, 63, 49, 11], [40, 21, 73, 72, 74, 75, 23],
+                   [13, 94, 93, 37, 100, 44, 38], [27, 31, 62, 10, 1, 81], [26, 54, 55, 25, 4, 56, 39]]
+
+        routes2 = [[52, 7, 82, 48, 47, 19, 49, 64], [89, 18, 60, 5, 84, 83, 8, 36],
+                   [28, 12, 80, 68, 24, 29, 65], [76, 77, 3, 79, 78, 34, 35], [13, 97, 87, 42, 15, 43],
+                   [6, 96, 99, 93, 61, 17, 45, 46], [50, 33, 9, 51, 20, 66, 71], [94, 59, 85, 91, 16, 86, 38],
+                   [53, 58, 2, 57, 41, 22, 23], [69, 1, 70, 30, 32, 90, 81], [40, 21, 73, 72, 74, 75, 56, 39],
+                   [95, 92, 37, 98, 100, 44, 14], [27, 31, 88, 62, 10, 63, 11], [26, 54, 55, 25, 4, 67]]
+
+
         rts = []
         self.sol = Solution()
-        for i in routes:
+        for i in routes2:
             self.sol.routes.append(Route(self.depot, self.capacity))
             rt = self.sol.routes[-1]
             for j in i:
@@ -264,7 +260,7 @@ class Solver:
                 rt_load += from_node.demand
             j.load = rt_load
             j.cost = rt_cumulative_cost
-        self.sol.cost_penalized=self.sol.cost
+        self.sol.cost_penalized = self.sol.cost
         for j in self.sol.routes:
             j: Route
             self.updates_cost_and_positions(j)
@@ -379,7 +375,7 @@ class Solver:
                 print(localSearchIterator, self.bestSolution.cost)
 
             localSearchIterator = localSearchIterator + 1
-            if localSearchIterator == 1000:
+            if localSearchIterator == 2000:
                 terminationCondition = True
 
         self.sol = self.bestSolution
@@ -539,7 +535,6 @@ class Solver:
                         costChangeSecondRoute = None
 
                         if rt1 == rt2:
-                            continue
                             if firstNodeIndex == secondNodeIndex - 1:
                                 costRemoved = cut_of_a1_b1 * self.distanceMatrix[a1.ID][b1.ID] + cut_of_b1_c1 * \
                                               self.distanceMatrix[b1.ID][b2.ID] + \
@@ -558,14 +553,16 @@ class Solver:
                                 moveCost_penalized = costAdded_penalized - costRemoved_penalized
 
                             else:
+
                                 costRemoved1 = cut_of_a1_b1 * self.distanceMatrix[a1.ID][b1.ID] + cut_of_b1_c1 * \
                                                self.distanceMatrix[b1.ID][c1.ID]
-                                costAdded1 = cut_of_a1_b1 * self.distanceMatrix[a1.ID][b2.ID] + cut_of_b1_c1 ** \
+                                costAdded1 = cut_of_a1_b1 * self.distanceMatrix[a1.ID][b2.ID] + cut_of_b1_c1 * \
                                              self.distanceMatrix[b2.ID][c1.ID]
                                 costRemoved2 = cut_of_a2_b2 * self.distanceMatrix[a2.ID][b2.ID] + cut_of_b2_c2 * \
                                                self.distanceMatrix[b2.ID][c2.ID]
                                 costAdded2 = cut_of_a2_b2 * self.distanceMatrix[a2.ID][b1.ID] + cut_of_b2_c2 * \
                                              self.distanceMatrix[b1.ID][c2.ID]
+                                moveCost = costAdded1 + costAdded2 - (costRemoved1 + costRemoved2)
                                 moveCost = costAdded1 + costAdded2 - (costRemoved1 + costRemoved2)
                                 costRemoved1_penalized = cut_of_a1_b1 * self.distance_matrix_penalized[a1.ID][b1.ID] + \
                                                          cut_of_b1_c1 * self.distance_matrix_penalized[b1.ID][c1.ID]
@@ -808,7 +805,8 @@ class Solver:
                             cost_new = self.calculate_two_opt_cost(rtInd1, rtInd2, nodeInd1, nodeInd2,
                                                                    self.distanceMatrix)
                             moveCost = cost_new - cost_old
-                            cost_new_penalized = self.calculate_two_opt_cost(rtInd1, rtInd2,nodeInd1,nodeInd2,self.distance_matrix_penalized)
+                            cost_new_penalized = self.calculate_two_opt_cost(rtInd1, rtInd2, nodeInd1, nodeInd2,
+                                                                             self.distance_matrix_penalized)
                             moveCost_penalized = cost_new_penalized - cost_old
                         if moveCost_penalized < top.moveCost_penalized:
                             self.StoreBestTwoOptMove(rtInd1, rtInd2, nodeInd1, nodeInd2, moveCost, moveCost_penalized,
@@ -1033,7 +1031,7 @@ class Solver:
         self.times_penalized[pen_1][pen_2] += 1
         self.times_penalized[pen_2][pen_1] += 1
 
-        pen_weight = 0.185
+        pen_weight = 0.195
 
         self.distance_matrix_penalized[pen_1][pen_2] = (1 + pen_weight * self.times_penalized[pen_1][pen_2]) * \
                                                        self.distanceMatrix[pen_1][pen_2]

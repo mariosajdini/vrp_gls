@@ -235,7 +235,6 @@ class Solver:
                    [53, 58, 2, 57, 41, 22, 23], [69, 1, 70, 30, 32, 90, 81], [40, 21, 73, 72, 74, 75, 56, 39],
                    [95, 92, 37, 98, 100, 44, 14], [27, 31, 88, 62, 10, 63, 11], [26, 54, 55, 25, 4, 67]]
 
-
         rts = []
         self.sol = Solution()
         for i in routes2:
@@ -329,7 +328,7 @@ class Solver:
         top = TwoOptMove()
 
         while terminationCondition is False:
-            operator = random.randint(0, 3)
+            operator = random.randint(0, 2)
             self.InitializeOperators(rm, sm, top)
             # SolDrawer.draw(localSearchIterator, self.sol, self.allNodes)
             # Relocations
@@ -1031,7 +1030,7 @@ class Solver:
         self.times_penalized[pen_1][pen_2] += 1
         self.times_penalized[pen_2][pen_1] += 1
 
-        pen_weight = 0.195
+        pen_weight = 0.18725
 
         self.distance_matrix_penalized[pen_1][pen_2] = (1 + pen_weight * self.times_penalized[pen_1][pen_2]) * \
                                                        self.distanceMatrix[pen_1][pen_2]

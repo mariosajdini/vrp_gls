@@ -33,3 +33,12 @@ class SolDrawer:
                     c1 = rt.sequenceOfNodes[i + 1]
                     plt.plot([c0.x, c1.x], [c0.y, c1.y], c=cmap(r))
 
+    @staticmethod
+    def drawTrajectory(searchTrajectory):
+        plt.clf()
+        plt.plot(searchTrajectory, 'o-')
+        plt.title('Search Trajectory')
+        plt.xlabel('Iterations')
+        plt.ylabel('Objective Function')
+        plt.savefig(str("SearchTrajectory"))
+

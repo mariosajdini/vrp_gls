@@ -52,6 +52,7 @@ class Node:
         self.waitingtimepenalized = 0
         self.cost_up_to_here = 0
         self.cost_up_to_here_penalized = 0
+        self.isTabuTillIterator = -1
 
 class Route:
     def __init__(self, dp, cap):
@@ -61,3 +62,4 @@ class Route:
         self.cost_penalized=0
         self.capacity = cap
         self.load = 0
+        self.last_node = self.sequenceOfNodes[-1]

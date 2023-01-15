@@ -118,108 +118,234 @@ class Solver:
         self.times_penalized = [[0 for j in range(rows)] for i in range(rows)]
         self.penalized_n1_ID = -1
         self.penalized_n2_ID = -1
+        self.penalize_weight = 0.1
+
+    def Initialize(self, m):
+        self.allNodes = m.allNodes
+        self.customers = m.customers
+        self.depot = m.allNodes[0]
+        self.distanceMatrix = m.matrix
+        self.capacity = m.capacity
+        self.used = {self.depot.ID}
+        self.sol = None
+        self.bestSolution = None
+        rows = len(self.allNodes)
+        self.distance_matrix_penalized = [[self.distanceMatrix[i][j] for j in range(rows)] for i in range(rows)]
+        self.times_penalized = [[0 for j in range(rows)] for i in range(rows)]
+        self.penalized_n1_ID = -1
+        self.penalized_n2_ID = -1
+        self.penalize_weight = 0.1
+
+
 
     def solve(self):
-        self.SetRoutedFlagToFalseForAllCustomers()
         self.ApplyNearestNeighborMethod()
         # self.MinimumInsertions()
         # self.geteasysol()
         self.ReportSolution(self.sol)
         self.LocalSearch(2)
         self.ReportSolution(self.sol)
+        return self.sol
+
+    def solve2(self):
+        self.LocalSearch(1)
         createOutputTxt(self)
         return self.sol
 
-    def SetRoutedFlagToFalseForAllCustomers(self):
-        for i in range(0, len(self.customers)):
-            self.customers[i].isRouted = False
+
+
+    def dot(self, vA, vB):
+        return vA[0] * vB[0] + vA[1] * vB[1]
+
+    def ang(self, lineA, lineB):
+        # Get nicer vector form
+        vA = [(lineA[0][0] - lineA[1][0]), (lineA[0][1] - lineA[1][1])]
+        vB = [(lineB[0][0] - lineB[1][0]), (lineB[0][1] - lineB[1][1])]
+        # Get dot prod
+        dot_prod = self.dot(vA, vB)
+        # Get magnitudes
+        magA = self.dot(vA, vA) ** 0.5
+        magB = self.dot(vB, vB) ** 0.5
+        # Get cosine value
+        cos_ = dot_prod / magA / magB
+        # Get angle in radians and then convert to degrees
+        try:
+            angle = math.acos(dot_prod / magB / magA)
+            ang_deg = math.degrees(angle) % 360
+
+            if ang_deg - 180 >= 0:
+                # As in if statement
+                return 360 - ang_deg
+            else:
+
+                return ang_deg
+        except:
+            return -100
+            pass
+        # Basically doing angle <- angle mod 360
+
 
     def find_node(self, r, n):
+
         dist = self.distanceMatrix[n.ID]
         nearest_v = 10000000
         nearest_index = 0
-        for i in range(0, len(dist)):
+        for i in range(1, len(dist)):
+            # min_dist = 1000000
+            # for n1 in self.list_of_last_nodes:
+            #     if n1.ID != 0 and self.distanceMatrix[i][n1.ID] < min_dist:
+            #         min_dist = self.distanceMatrix[i][n1.ID]
+
             if dist[i] < nearest_v and i not in self.used and r.load + self.allNodes[i].demand < r.capacity:
                 nearest_index = i
                 nearest_v = dist[i]
+
         self.used.add(nearest_index)
+
         return nearest_index, nearest_v
 
-    def find_route(self, node):
-        list_of_last_nodes = []
-        for r in self.sol.routes:
-            last_node: Node = r.sequenceOfNodes[-1]
-            last_node.route = r
-            list_of_last_nodes.append(last_node)
+
+    def find_route(self, node,multiplier,multiplier2):
 
         dist = self.distanceMatrix[node.ID]
         nearest_v = 100000000
-        for l_node in list_of_last_nodes:
-            l_node_id = l_node.ID
-            waiting_time = dist[l_node_id] + l_node.waitingtime
-            waiting_time = 2.5 * dist[l_node_id] + l_node.waitingtime
-            if waiting_time < nearest_v and l_node.route.load + node.demand < l_node.route.capacity:
-                nearest_node = l_node
-                nearest_v = waiting_time
+        for l_node in self.list_of_last_nodes:
 
-        nearest_v -= 1.5 * dist[nearest_node.ID]
+            waiting_time = dist[l_node.ID] + l_node.waitingtime
+            waiting_time = multiplier * dist[l_node.ID] + l_node.waitingtime
+            if l_node.ID == 0:
+                if waiting_time < nearest_v:
+                    nearest_node = l_node
+                    nearest_v = waiting_time
+            else:
+                lineA = ((l_node.x,l_node.y),(node.x, node.y))
+                previous_node = l_node.route.sequenceOfNodes[-2]
+                lineB = ((l_node.x,l_node.y),(previous_node.x,previous_node.y))
+
+                angle = self.ang(lineA, lineB)
+                if angle != -100:
+                    val = 180 - angle
+                    objective = waiting_time
+
+                    if val < 30:
+                        objective = multiplier2 * waiting_time
+                    elif val < 40:
+                        objective = (multiplier2+ 0.05) * waiting_time
+                    elif val >110:
+                        objective = 1.2 * waiting_time
+
+                    if objective  < nearest_v  and l_node.route.load + node.demand < l_node.route.capacity:
+                        nearest_node = l_node
+                        self.hhh = dist[l_node.ID]
+                        nearest_v = waiting_time
+                else:
+                    if waiting_time < nearest_v and l_node.route.load + node.demand < l_node.route.capacity:
+                        nearest_node = l_node
+                        nearest_v = waiting_time
+
+        nearest_v -= (multiplier - 1) * dist[nearest_node.ID]
 
         return nearest_node, nearest_v
-
-    def find_most_distant_node(self):
+    def find_less_distant_node(self,multiplier,multiplier2):
         dist_of_most_distant = 1000000
         for node in self.customers:
             if node.isRouted == False:
-                nearest_node, nearest_v = self.find_route(node)
+                nearest_node, nearest_v = self.find_route(node,multiplier,multiplier2)
                 if nearest_v < dist_of_most_distant:
                     dist_of_most_distant = nearest_v
                     most_distant = node
         return most_distant
 
+    # def find_most_distant_node(self,multiplier):
+    #     dist_of_most_distant = -1000000
+    #     for node in self.customers:
+    #         if node.isRouted == False:
+    #             nearest_node, nearest_v = self.find_route(node,multiplier)
+    #             if nearest_v > dist_of_most_distant:
+    #                 dist_of_most_distant = nearest_v
+    #                 most_distant = node
+    #     return most_distant
+    def find_nearest_node_to_depot(self):
+        dist = self.distanceMatrix[0]
+        min = 100000000
+        for c in self.customers:
+            if dist[c.ID] < min:
+                min_node = c
+                min = dist[c.ID]
+
+        return min_node, min
+
     def ApplyNearestNeighborMethod(self):
         modelIsFeasible = True
         self.sol = Solution()
+
         for i in range(0, 14):
             self.sol.routes.append(Route(self.depot, self.capacity))
-        j = 0
-        for i in range(1, len(self.allNodes) - 86):
-            route_index = j % 14
-            route: Route = self.sol.routes[route_index]
-            last_node: Node = route.sequenceOfNodes[-1]
-            nearest_possible, value = self.find_node(route, last_node)
-            n1: Node = self.allNodes[nearest_possible]
-            n1.isRouted = True
-            up_coming_len = len(route.sequenceOfNodes) + 1
-            if up_coming_len > 2:
-                n1.waitingtime += 10
-            n1.waitingtime += last_node.waitingtime + value
-            self.sol.cost += n1.waitingtime
-            route.cost += n1.waitingtime
-            route.load += n1.demand
-            n1.cost_up_to_here = route.cost
-            n1.positionInRoute = len(route.sequenceOfNodes)
-            route.sequenceOfNodes.append(n1)
-            j += 1
+            self.sol.routes[i].ID = i
 
-        number_of_unrouted_nodes = 86
+        # j = 0
+        self.list_of_last_nodes = [r.last_node for r in self.sol.routes]
+        # for i in range(1, len(self.allNodes) -100):
+        #
+        #     route_index = j % 14
+        #     route: Route = self.sol.routes[route_index]
+        #     last_node: Node = route.sequenceOfNodes[-1]
+        #     nearest_possible, value = self.find_node(route, last_node)
+        #
+        #     # if nearest_possible == 6:
+        #     #     nearest_possible = 31
+        #     #     value = self.distanceMatrix[last_node.ID][31]
+        #     #     self.used.add(nearest_possible)
+        #     n1: Node = self.allNodes[nearest_possible]
+        #     n1.isRouted = True
+        #     up_coming_len = len(route.sequenceOfNodes) + 1
+        #     if up_coming_len > 2:
+        #         n1.waitingtime += 10
+        #     n1.waitingtime += last_node.waitingtime + value
+        #     route.cost += n1.waitingtime
+        #     route.load += n1.demand
+        #     n1.cost_up_to_here = route.cost
+        #     n1.positionInRoute = len(route.sequenceOfNodes)
+        #     route.sequenceOfNodes.append(n1)
+        #     n1.route = route
+        #     self.list_of_last_nodes[route_index] = n1
+        #     j += 1
+
+        number_of_unrouted_nodes = 100
         for i in range(number_of_unrouted_nodes):
-            node = self.find_most_distant_node()
-            nearest_last_node, value = self.find_route(node)
+            if i == 0:
+                node, value = self.find_nearest_node_to_depot()
+                route = self.sol.routes[0]
+            else:
+                multiplier = 1.3
+
+                multiplier2 = 0.8
+                node = self.find_less_distant_node(multiplier,multiplier2)
+
+                nearest_last_node, value = self.find_route(node,multiplier,multiplier2)
+                if nearest_last_node.ID == 0:
+                    for r in self.sol.routes:
+                        if len(r.sequenceOfNodes) == 1:
+                            route = r
+                            break
+                else:
+                    route = nearest_last_node.route
+
             self.used.add(node.ID)
             node.isRouted = True
-
-            node.waitingtime += 10
+            if len(route.sequenceOfNodes) != 1:
+                node.waitingtime += 10
             node.waitingtime += value
-            nearest_last_node.route.cost += node.waitingtime
-            self.sol.cost += node.waitingtime
-            nearest_last_node.route.load += node.demand
-            node.cost_up_to_here = nearest_last_node.route.cost
-            node.positionInRoute = len(nearest_last_node.route.sequenceOfNodes)
-            nearest_last_node.route.sequenceOfNodes.append(node)
 
-        if (modelIsFeasible == False):
-            print('FeasibilityIssue')
-            # reportSolution
+            # route = nearest_last_node.route
+            route.cost += node.waitingtime
+            route.load += node.demand
+            node.cost_up_to_here = route.cost
+            node.positionInRoute = len(route.sequenceOfNodes)
+            route.sequenceOfNodes.append(node)
+            node.route = route
+            route.last_node = node
+            self.list_of_last_nodes[route.ID] = node
 
     def geteasysol(self):
         # zax routes
@@ -314,8 +440,6 @@ class Solver:
                 model_is_feasible = False
                 break
 
-        if model_is_feasible:
-            self.TestSolution()
 
     def LocalSearch(self, operator):
         random.seed(1)
@@ -367,14 +491,12 @@ class Solver:
                         self.penalize_arcs()
                         localSearchIterator = localSearchIterator - 1
 
-            self.TestSolution()
-
             if (self.sol.cost < self.bestSolution.cost):
                 self.bestSolution = self.cloneSolution(self.sol)
                 print(localSearchIterator, self.bestSolution.cost)
 
             localSearchIterator = localSearchIterator + 1
-            if localSearchIterator == 2000:
+            if localSearchIterator == 550:
                 terminationCondition = True
 
         self.sol = self.bestSolution
@@ -968,16 +1090,6 @@ class Solver:
         cost += cummulative * 10
         return cost
 
-    def TestSolution(self):
-        totalSolCost = 0
-        for r in range(0, len(self.sol.routes)):
-            rt: Route = self.sol.routes[r]
-            rtCost, rtLoad = self.calculate_route_details(rt.sequenceOfNodes)
-            if abs(rtCost - rt.cost) > 0.0001:
-                print('Route Cost problem')
-            totalSolCost += rt.cost
-        if abs(totalSolCost - self.sol.cost) > 0.0001:
-            print('Solution Cost problem')
 
     def IdentifyBestInsertionAllPositions(self, bestInsertion, rt):
         for i in range(0, len(self.customers)):
@@ -1030,7 +1142,7 @@ class Solver:
         self.times_penalized[pen_1][pen_2] += 1
         self.times_penalized[pen_2][pen_1] += 1
 
-        pen_weight = 0.18725
+        pen_weight = self.penalize_weight
 
         self.distance_matrix_penalized[pen_1][pen_2] = (1 + pen_weight * self.times_penalized[pen_1][pen_2]) * \
                                                        self.distanceMatrix[pen_1][pen_2]
